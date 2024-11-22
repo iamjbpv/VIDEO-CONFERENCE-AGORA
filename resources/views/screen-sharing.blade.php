@@ -132,6 +132,24 @@
             monitorAudioLevel(localTracks.audioTrack);
         };
 
+        const startScreenSharing = async () => {
+            // Create and publish a screen-sharing track
+            const screenTrack = await AgoraRTC.createScreenVideoTrack();
+            await client.unpublish(localTracks.videoTrack); // Unpublish current video
+            await client.publish(screenTrack);
+
+            // Play the screen-sharing video locally
+            const screenPlayer = document.getElementById(`player-${uid}`);
+            screenTrack.play(screenPlayer);
+
+            // Restore the camera feed when screen sharing ends
+            screenTrack.on('track-ended', async () => {
+                await client.unpublish(screenTrack);
+                await client.publish(localTracks.videoTrack);
+                localTracks.videoTrack.play(screenPlayer);
+            });
+        };
+
         const monitorAudioLevel = (audioTrack) => {
             setInterval(() => {
                 const volume = audioTrack.getVolumeLevel();
@@ -201,6 +219,15 @@
             const { token } = await response.json();
             await joinConference(token);
         });
+
+        document.getElementById('startScreenShare').addEventListener('click', async () => {
+            try {
+                await startScreenSharing();
+            } catch (error) {
+                console.error('Error starting screen sharing:', error);
+            }
+        });
+
 
         document.getElementById('micSelection').addEventListener('change', async () => {
             const selectedMic = document.getElementById('micSelection').value;
