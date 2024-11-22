@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agora Video Conference with Device Selection</title>
     <script src="https://cdn.agora.io/sdk/release/AgoraRTC_N-4.13.0.js"></script>
-    <script src="https://cdn.agora.io/sdk/release/AgoraRTM_N-1.5.1.js"></script>
+    <script src="https://unpkg.com/agora-rtm-sdk@1.5.1/index.js"></script>
     <style>
         #video-grid {
             display: flex;
@@ -115,17 +115,22 @@
                 console.log('Published audio tracks');
             }
 
-            localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack();
-            if (localTracks.videoTrack != null) {
-                const localPlayer = document.createElement('div');
-                localPlayer.id = `player-${uid}`;
-                localPlayer.classList.add('video-box');
-                document.getElementById('video-grid').appendChild(localPlayer);
-                localTracks.videoTrack.play(localPlayer);
+            try {
+                localTracks.videoTrack = await AgoraRTC.createCameraVideoTrack();
+                if (localTracks.videoTrack != null) {
+                    const localPlayer = document.createElement('div');
+                    localPlayer.id = `player-${uid}`;
+                    localPlayer.classList.add('video-box');
+                    document.getElementById('video-grid').appendChild(localPlayer);
+                    localTracks.videoTrack.play(localPlayer);
 
-                await client.publish(localTracks.videoTrack);
-                console.log('Published video tracks');
+                    await client.publish(localTracks.videoTrack);
+                    console.log('Published video tracks');
+                }
+            } catch (err) {
+                console.log('video err', err)
             }
+
 
             document.getElementById('toggleCamera').disabled = false;
             document.getElementById('toggleMic').disabled = false;
@@ -245,7 +250,7 @@
         client.on('user-published', handleUserPublished);
 
         document.getElementById('joinConference').addEventListener('click', async () => {
-            const response = await fetch('/api/api/generate-token', {
+            const response = await fetch('/api/generate-token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ channel_name: channelName, uid }),
