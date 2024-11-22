@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agora Video Conference with Device Selection</title>
     <script src="https://cdn.agora.io/sdk/release/AgoraRTC_N-4.13.0.js"></script>
+    <script src="https://cdn.agora.io/sdk/release/AgoraRTM_N-1.5.1.js"></script>
     <style>
         #video-grid {
             display: flex;
@@ -71,6 +72,7 @@
             videoTrack: null,
             audioTrack: null,
         };
+        let screenTrack = null;
         const remoteUsers = {};
         let cameraEnabled = true;
         let micEnabled = true;
@@ -130,24 +132,56 @@
 
 
             monitorAudioLevel(localTracks.audioTrack);
+            await initializeRTM();
+        };
+
+        const initializeRTM = async () => {
+            rtmClient = AgoraRTM.createInstance(appId);
+            await rtmClient.login({ uid: String(uid) });
+            rtmChannel = rtmClient.createChannel(channelName);
+
+            rtmChannel.on('ChannelMessage', (message, memberId) => {
+                const data = JSON.parse(message.text);
+                console.log('CHANNEL DATA', data);
+                if (data.type === 'screen-sharing') {
+                    handleScreenSharingNotification(data.uid, data.isScreenSharing);
+                }
+            });
+
+            await rtmChannel.join();
+            console.log('RTM channel joined');
         };
 
         const startScreenSharing = async () => {
-            // Create and publish a screen-sharing track
-            const screenTrack = await AgoraRTC.createScreenVideoTrack();
-            await client.unpublish(localTracks.videoTrack); // Unpublish current video
+            if (screenTrack) return;
+            screenTrack = await AgoraRTC.createScreenVideoTrack();
             await client.publish(screenTrack);
 
-            // Play the screen-sharing video locally
-            const screenPlayer = document.getElementById(`player-${uid}`);
+            const screenPlayer = document.createElement('div');
+            screenPlayer.id = `player-${uid}-screen`;
+            screenPlayer.classList.add('video-box');
+            document.getElementById('video-grid').appendChild(screenPlayer);
             screenTrack.play(screenPlayer);
 
-            // Restore the camera feed when screen sharing ends
+            notifyScreenSharing(true);
+
             screenTrack.on('track-ended', async () => {
-                await client.unpublish(screenTrack);
-                await client.publish(localTracks.videoTrack);
-                localTracks.videoTrack.play(screenPlayer);
+                stopScreenSharing();
             });
+        };
+        const stopScreenSharing = async () => {
+            if (!screenTrack) return;
+            await client.unpublish(screenTrack);
+            screenTrack.stop();
+            screenTrack.close();
+            document.getElementById(`player-${uid}-screen`).remove();
+            screenTrack = null;
+
+            notifyScreenSharing(false);
+        };
+        const notifyScreenSharing = async (isScreenSharing) => {
+            const message = JSON.stringify({ type: 'screen-sharing', uid, isScreenSharing });
+            await rtmChannel.sendMessage({ text: message });
         };
 
         const monitorAudioLevel = (audioTrack) => {
@@ -211,7 +245,7 @@
         client.on('user-published', handleUserPublished);
 
         document.getElementById('joinConference').addEventListener('click', async () => {
-            const response = await fetch('/api/api/generate-token', {
+            const response = await fetch('/api/generate-token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ channel_name: channelName, uid }),
