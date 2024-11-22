@@ -157,6 +157,14 @@
             console.log('RTM channel joined');
         };
 
+        const handleScreenSharingNotification = (uid, isScreenSharing) => {
+            console.log(`Screen sharing notification for UID ${uid}:`, isScreenSharing);
+            if (!remoteUsers[uid]) {
+                remoteUsers[uid] = { cameraTrack: null, screenTrack: null };
+            }
+            remoteUsers[uid].isScreenSharing = isScreenSharing;
+        };
+
         const startScreenSharing = async () => {
             if (screenTrack) return;
             screenTrack = await AgoraRTC.createScreenVideoTrack();
