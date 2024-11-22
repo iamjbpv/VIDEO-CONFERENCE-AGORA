@@ -124,7 +124,7 @@
                 await client.join(appId, channelName, token, uid);
 
                 let shareUID = uid + 'user-screen';
-                const response = await fetch('/api/generate-token', {
+                const response = await fetch('/api/api/generate-token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ channel_name: channelForScreen, shareUID }),
