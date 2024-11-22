@@ -71,10 +71,12 @@
         $(document).ready(function () {
             const appId = '{{ env('AGORA_APP_ID') }}';
             const channelName = 'test_channel';
+            const channelForScreen = 'test_channel_screen';
             const uid = Math.floor(Math.random() * 10000);
-
+            let globalToken = "";
             // Agora RTC and RTM clients
             const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+            const clientForScreenShare = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
             const remoteUsers = {};
             let rtmClient;
             let rtmChannel;
@@ -109,7 +111,7 @@
                 rtmChannel.on('ChannelMessage', (message, memberId) => {
                     const data = JSON.parse(message.text);
                     if (data.type === 'screen-sharing') {
-                        handleScreenSharingNotification(data.uid, data.isScreenSharing);
+                        handleScreenSharingNotification(data.uid + 'user-screen', data.isScreenSharing);
                     }
                 });
 
@@ -118,7 +120,17 @@
             };
 
             const joinConference = async (token) => {
+                globalToken = token;
                 await client.join(appId, channelName, token, uid);
+
+                let shareUID = uid + 'user-screen';
+                const response = await fetch('/api/generate-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ channel_name: channelForScreen, shareUID }),
+                });
+                let res = await response.json();
+                await clientForScreenShare.join(appId, channelForScreen, res.token, shareUID);
 
                 const selectedMic = document.getElementById('micSelection').value;
                 localTracks.audioTrack = await AgoraRTC.createMicrophoneAudioTrack({ microphoneId: selectedMic });
@@ -146,8 +158,10 @@
                 await initializeRTM();
             };
             const startScreenSharing = async () => {
+
                 screenTrack = await AgoraRTC.createScreenVideoTrack();
-                await client.publish(screenTrack);
+                console.log(screenTrack);
+                await clientForScreenShare.publish(screenTrack);
 
                 const screenPlayer = document.createElement('div');
                 screenPlayer.id = `player-${uid}-screen`;
@@ -163,7 +177,7 @@
             };
 
             const stopScreenSharing = async () => {
-                await client.unpublish(screenTrack);
+                await clientForScreenShare.unpublish(screenTrack);
                 screenTrack.stop();
                 screenTrack.close();
                 document.getElementById(`player-${uid}-screen`).remove();
@@ -192,26 +206,31 @@
                 await client.subscribe(user, mediaType);
                 let playerId = `player-${user.uid}-${mediaType === 'video' ? 'camera' : 'audio'}`;
                 if (mediaType === 'video') {
-                    const delay = ms => new Promise(res => setTimeout(res, ms));
-                    await delay(3000);
-                    let isUserIdSharing = remoteUsers[user.uid]?.isScreenSharing;
-                    console.log('SHARING', remoteUsers[user.uid]?.isScreenSharing);
-                    playerId = remoteUsers[user.uid]?.isScreenSharing ? `player-${user.uid}-screen` : `player-${user.uid}-camera`;
                     const player = document.createElement('div');
                     player.id = playerId;
                     player.classList.add('video-box');
-                    if (isUserIdSharing) {
-                        document.getElementById('video-screen-share').appendChild(player);
-                    } else {
-                        document.getElementById('video-grid').appendChild(player);
-                    }
+                    document.getElementById('video-grid').appendChild(player);
                     user.videoTrack.play(player);
                 } else if (mediaType === 'audio') {
                     user.audioTrack.play();
                 }
             };
 
+            const handleUserShareScreenPublished = async (user, mediaType) => {
+                await clientForScreenShare.subscribe(user, mediaType);
+                let playerId = `player-${user.uid}-${mediaType === 'video' ? 'camera' : 'audio'}`;
+                if (mediaType === 'video') {
+                    const player = document.createElement('div');
+                    player.id = playerId;
+                    player.classList.add('video-box');
+                    user.videoTrack.play(player);
+                    document.getElementById('video-screen-share').appendChild(player);
+                }
+            };
+
+
             client.on('user-published', handleUserPublished);
+            clientForScreenShare.on('user-published', handleUserShareScreenPublished);
 
             document.getElementById('joinConference').addEventListener('click', async () => {
                 const response = await fetch('/api/api/generate-token', {
