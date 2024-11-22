@@ -214,7 +214,7 @@
             client.on('user-published', handleUserPublished);
 
             document.getElementById('joinConference').addEventListener('click', async () => {
-                const response = await fetch('/api/generate-token', {
+                const response = await fetch('/api/api/generate-token', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ channel_name: channelName, uid }),
